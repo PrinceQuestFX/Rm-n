@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f766e">
+<link rel="manifest" href="manifest.json"><link rel="icon" href="icon-192.png"><link rel="apple-touch-icon" href="icon-192.png">
+<title>Révision Médecine S1</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--tx:#1b1f24;--mu:#6b7280;--ac:#0f766e;--bd:#e3e6ea;--ko:#b91c1c;--ok:#15803d;padding-top:env(safe-area-inset-top,0px)}
+@media(prefers-color-scheme:dark){:root{--bg:#111418;--card:#1a1f26;--tx:#e8eaed;--mu:#9aa3ad;--ac:#2dd4bf;--bd:#2b323b;--ko:#f87171;--ok:#4ade80}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;padding-bottom:80px}
+main{max-width:760px;margin:0 auto;padding:14px}
+h1{font-size:19px;margin:0 0 10px}h2{font-size:16px;margin:16px 0 8px}
+.c{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;margin:8px 0}
+nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:var(--card);border-top:1px solid var(--bd);padding-bottom:env(safe-area-inset-bottom,0px)}
+nav button{flex:1;border:0;background:none;color:var(--mu);padding:12px 2px;font-size:12px}
+nav button.on{color:var(--ac);font-weight:700}
+input,select,textarea,button{font:inherit;color:var(--tx)}
+input,select,textarea{width:100%;padding:8px;margin:4px 0;background:var(--bg);border:1px solid var(--bd);border-radius:8px}
+.b{background:var(--ac);color:#06201d;border:0;border-radius:8px;padding:9px 14px;margin:4px 4px 4px 0;cursor:pointer}
+.b.g{background:none;border:1px solid var(--bd);color:var(--tx)}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.k{font-size:26px;font-weight:700;color:var(--ac)}.m{color:var(--mu);font-size:13px}
+.o{display:block;width:100%;text-align:left;background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:10px;margin:6px 0}
+.o.ok{border-color:var(--ok)}.o.ko{border-color:var(--ko)}
+.bar{height:8px;background:var(--bd);border-radius:6px;overflow:hidden}.bar i{display:block;height:100%;background:var(--ac)}
+.ch{display:flex;align-items:flex-end;gap:3px;height:70px}.ch i{flex:1;background:var(--ac);border-radius:3px 3px 0 0;min-height:2px}
+iframe{width:100%;height:70vh;border:1px solid var(--bd);border-radius:8px}
+.tag{display:inline-block;font-size:11px;padding:1px 7px;border:1px solid var(--bd);border-radius:9px;color:var(--mu);margin-right:4px}
+#st{position:fixed;top:calc(env(safe-area-inset-top,0px) + 4px);right:8px;font-size:11px;color:var(--mu)}
+</style></head><body><span id="st"></span><main id="v"></main><nav id="n"></nav>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="config.js"></script><script src="app.js"></script>
+<script>if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js'))</script>
+</body></html>
