@@ -32,7 +32,7 @@ function go(t){tab=t;if(t!='rev')sess=null;nav();R[t]()}
 /* Connexion */
 function login(){$('#n').innerHTML='';$('#v').innerHTML=`<h1>Révision Médecine S1</h1><div class="c"><b>Connexion</b><input id="em" type="email" placeholder="Email" autocomplete="email"><input id="pw" type="password" placeholder="Mot de passe (6 caractères min.)" autocomplete="current-password"><button class="b" onclick="auth(0)">Se connecter</button><button class="b g" onclick="auth(1)">Créer un compte</button><div class="m" id="msg"></div></div>`}
 async function auth(create){const email=$('#em').value.trim(),password=$('#pw').value;if(!email||password.length<6)return $('#msg').textContent='Email et mot de passe (6 min.) requis.';
-const r=create?await sb.auth.signUp({email,password}):await sb.auth.signInWithPassword({email,password});
+const r=create?await sb.auth.signUp({email,password,options:{emailRedirectTo:location.origin}}):await sb.auth.signInWithPassword({email,password});
 if(r.error)return $('#msg').textContent=r.error.message;
 if(!r.data.session)return $('#msg').textContent='Compte créé. Confirme ton email puis connecte-toi.';
 user=r.data.session.user;start()}
