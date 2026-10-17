@@ -1,1 +1,10 @@
 .vercel
+
+node_modules/
+
+node_modules/
+config.json
+package.json
+package-lock.json
+generer.js
+lancer.bat

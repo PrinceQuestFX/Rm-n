@@ -25,6 +25,12 @@ ls(it.id).then(l=>{P.d++;P.f+=l.length;P.tick();for(const f of l){if(f.mimeType=
 .catch(e=>{if(!fail){fail=true;rej(e)}}).finally(()=>{act--;if(!fail){pump()}})}
 if(!fail&&!act&&!q.length)res()};pump()})}
 async function pool(items,n,fn){let i=0;await Promise.all(Array.from({length:Math.min(n,items.length)},async()=>{while(i<items.length&&!T.stop){await fn(items[i++])}}))}
+async function splitPdf(blob){if(!window.PDFLib)return null;try{const src=await PDFLib.PDFDocument.load(await blob.arrayBuffer(),{ignoreEncryption:true,updateMetadata:false}),total=src.getPageCount();
+let n=Math.max(2,Math.ceil(blob.size/(32*1048576)));
+for(let t=0;t<4&&total>1;t++){const per=Math.ceil(total/n),out=[];let bad=false;
+for(let i=0;i<total;i+=per){const d=await PDFLib.PDFDocument.create(),idx=[];for(let j=i;j<Math.min(total,i+per);j++)idx.push(j);
+(await d.copyPages(src,idx)).forEach(p=>d.addPage(p));const b=new Blob([await d.save()],{type:'application/pdf'});if(b.size>MAXB)bad=true;out.push(b)}
+if(!bad)return out;n=Math.min(total,n*2)}return null}catch(e){return null}}
 async function get(f){const r=await gf(`${API}/${f.id}?alt=media&supportsAllDrives=true`);return new Blob([await r.blob()],{type:'application/pdf'})}
 let T=null,tmr=null;
 const mmss=s=>String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');
@@ -46,7 +52,7 @@ const chk=()=>{if(T.stop)throw new Error('Synchronisation annulée')};
 const set=(i,m,pc)=>{T.i=i;T.msg=m;T.pct=Math.min(100,Math.round(pc));T.last=Date.now();paint()};
 const note=m=>{T.log.push(m);T.last=Date.now();paint()};
 try{const tok=await token();TOK.v=tok;chk();
-const all=[],bad=new Set(),rep={d:new Date().toLocaleString('fr-FR'),neu:[],mod:[],off:[],dup:[],ver:[],chk:[],other:0,skipd:0,nonpdf:0,big:[],err:[],q:0};
+const all=[],bad=new Set(),rep={d:new Date().toLocaleString('fr-FR'),neu:[],mod:[],off:[],dup:[],ver:[],chk:[],other:0,skipd:0,nonpdf:0,big:[],split:[],loc:[],err:[],q:0};
 for(const [k,f] of F.entries()){const P={d:0,f:0,s:0,tick(){chk();set(1+k,`Analyse de ${f.label}… ${this.d} dossier(s) lu(s), ${this.f} fichier(s) trouvé(s)`,(1+k)/N*100)}};P.tick();
 try{await scan(f.id,all,f.label,P);rep.skipd+=P.s}catch(e){if(T.stop||/Session Google/.test(e.message))throw e;bad.add(f.label);rep.err.push(f.label+' : '+e.message);note('! '+f.label+' : '+e.message)}}
 set(iT,'Tri des documents du semestre 1 et détection des doublons…',iT/N*100);
@@ -59,13 +65,18 @@ byN.forEach(l=>{if(l.length>1)rep.ver.push(l.map(f=>`${f.name} (${f.src})`).join
 const today=new Date().toISOString().slice(0,10),todo=[];
 for(const f of cand){const ex=S.docs.find(d=>d.gid==f.id&&!d.del);
 if(ex&&ex.md5==f.sig){if(ex.off){ex.off=false;touch(ex)}continue}
-if(Number(f.size)>MAXB){rep.big.push(f.name);note('! trop gros (> 45 Mo) : '+f.name);continue}
-todo.push({f,ex})}
+f.big=Number(f.size)>MAXB;todo.push({f,ex})}
 note(`${pdfs.length} PDF trouvés, ${cand.length} retenus, ${todo.length} à télécharger`);
 set(iD,`Téléchargement 0/${todo.length}…`,iD/N*100);let n=0;
 await pool(todo,3,async({f,ex})=>{if(T.stop)return;
 try{const blob=await get(f);
-if(ex){await idb('put',ex.id,blob);ex.ver++;ex.md5=f.sig;ex.imp=today;ex.up=false;ex.off=false;touch(ex);rep.mod.push(f.name);
+if(f.big){const segs=f.path.filter(s=>!ONE.test(s)&&!OTH.test(s)),t0=f.name.replace(/\.pdf$/i,'');note(`Découpage de ${f.name} (fichier volumineux)…`);const parts=await splitPdf(blob);
+S.docs.filter(d=>d.gid==f.id&&!d.del).forEach(d=>{d.del=true;touch(d);idb('del',d.id)});
+const mk=(id,titre,extra)=>S.docs.push(touch({id,nom:f.name,titre,mat:segs[0]||'Sans matière',chap:segs[1]||'—',type:TYP(f.path.join(' ')+' '+f.name),desc:f.path.join(' / '),date:(f.modifiedTime||'').slice(0,10),src:f.src,gid:f.id,md5:f.sig,ver:1,imp:today,up:false,chk:f.sem=='?',...extra}));
+if(parts){for(let k=0;k<parts.length;k++){const id=uid();await idb('put',id,parts[k]);mk(id,`${t0} — partie ${k+1}/${parts.length}`,{part:k+1})}rep.split.push(`${f.name} → ${parts.length} parties`)}
+else{const id=uid();await idb('put',id,blob);mk(id,t0,{loc:true,up:true});rep.loc.push(f.name)}
+rep.neu.push(f.name);if(f.sem=='?')rep.chk.push(f.name)}
+else if(ex){await idb('put',ex.id,blob);ex.ver++;ex.md5=f.sig;ex.imp=today;ex.up=false;ex.off=false;touch(ex);rep.mod.push(f.name);
 live('qs').filter(q=>q.doc==ex.id).forEach(q=>{q.next=0;q.rev=true;touch(q);rep.q++})}
 else{const id=uid(),segs=f.path.filter(s=>!ONE.test(s)&&!OTH.test(s));await idb('put',id,blob);
 S.docs.push(touch({id,nom:f.name,titre:f.name.replace(/\.pdf$/i,''),mat:segs[0]||'Sans matière',chap:segs[1]||'—',type:TYP(f.path.join(' ')+' '+f.name),desc:f.path.join(' / '),date:(f.modifiedTime||'').slice(0,10),src:f.src,gid:f.id,md5:f.sig,ver:1,imp:today,up:false,chk:f.sem=='?'}));
@@ -79,10 +90,10 @@ REP=rep;try{localStorage.setItem('rm_rep',JSON.stringify(rep))}catch(e){}save();
 catch(e){T.run=false;T.fail=(/annulée|Session Google/.test(e.message)?'':'Échec : ')+e.message;clearInterval(tmr);try{save()}catch(x){}paint()}}
 const row=(l,a)=>{const n=Array.isArray(a)?a.length:a;return n?`<div>• <b>${n}</b> ${l}${Array.isArray(a)?`<div class="m">${a.slice(0,8).map(esc).join('<br>')}${a.length>8?'<br>…':''}</div>`:''}</div>`:''};
 const rapport=r=>!r?'':`<div class="c"><b>Rapport de synchronisation</b> <span class="m">${esc(r.d)}${r.sec!=null?' · durée '+mmss(r.sec):''}</span>
-${row('nouveau(x) document(s)',r.neu)}${row('document(s) modifié(s) mis à jour',r.mod)}${r.q?row('question(s) à revoir aujourd\'hui (document modifié)',r.q):''}${row('document(s) désactivé(s) (supprimé(s) du Drive)',r.off)}${row('doublon(s) ignoré(s)',r.dup)}${row('versions différentes du même cours à comparer',r.ver)}${row('document(s) au semestre non précisé (à vérifier)',r.chk)}${row('document(s) d\'autres semestres ignoré(s)',r.other)}${row('dossier(s) d\'autres semestres ignoré(s) sans être ouverts',r.skipd)}${row('fichier(s) non PDF ignoré(s)',r.nonpdf)}${row('fichier(s) trop gros (&gt; 45 Mo) ignoré(s)',r.big)}${row('erreur(s)',r.err)}
+${row('nouveau(x) document(s)',r.neu)}${row('document(s) modifié(s) mis à jour',r.mod)}${r.q?row('question(s) à revoir aujourd\'hui (document modifié)',r.q):''}${row('document(s) désactivé(s) (supprimé(s) du Drive)',r.off)}${row('doublon(s) ignoré(s)',r.dup)}${row('versions différentes du même cours à comparer',r.ver)}${row('document(s) au semestre non précisé (à vérifier)',r.chk)}${row('document(s) d\'autres semestres ignoré(s)',r.other)}${row('dossier(s) d\'autres semestres ignoré(s) sans être ouverts',r.skipd)}${row('fichier(s) non PDF ignoré(s)',r.nonpdf)}${row('fichier(s) volumineux découpé(s) automatiquement',r.split||[])}${row('fichier(s) volumineux gardé(s) sur ce PC seulement (non synchronisés)',r.loc||[])}${row('fichier(s) trop gros (&gt; 45 Mo) ignoré(s)',r.big)}${row('erreur(s)',r.err)}
 ${!(r.neu.length+r.mod.length+r.off.length+r.dup.length+r.ver.length+r.err.length+r.big.length)?'<div class="m">Aucun changement.</div>':''}</div>`;
 window.DRV_SYNC=resync;
-function dl2(){const f=($('#fq')?.value||'').toLowerCase();$('#dl').innerHTML=live('docs').filter(d=>(d.titre+d.mat+d.chap).toLowerCase().includes(f)).map(d=>`<div class="c"><b>${esc(d.titre)}</b><br><span class="tag">${esc(d.type)}</span><span class="tag">${esc(d.mat)}</span><span class="tag">${esc(d.chap)}</span><span class="tag">v${d.ver}</span><span class="tag">${esc(d.src||'')}</span>${d.chk?'<span class="tag">S1 à vérifier</span>':''}${d.off?'<span class="tag">désactivé</span>':''}<div class="m">${esc(d.desc)} · ${d.imp}</div><button class="b g" onclick="view('${d.id}')">Lire</button><button class="b g" onclick="delDoc('${d.id}')">Supprimer</button></div>`).join('')||'<p class="m">Aucun document.</p>'}
+function dl2(){const f=($('#fq')?.value||'').toLowerCase();$('#dl').innerHTML=live('docs').filter(d=>(d.titre+d.mat+d.chap).toLowerCase().includes(f)).map(d=>`<div class="c"><b>${esc(d.titre)}</b><br><span class="tag">${esc(d.type)}</span><span class="tag">${esc(d.mat)}</span><span class="tag">${esc(d.chap)}</span><span class="tag">v${d.ver}</span><span class="tag">${esc(d.src||'')}</span>${d.chk?'<span class="tag">S1 à vérifier</span>':''}${d.off?'<span class="tag">désactivé</span>':''}${d.loc?'<span class="tag">PC seulement</span>':''}<div class="m">${esc(d.desc)} · ${d.imp}</div><button class="b g" onclick="view('${d.id}')">Lire</button><button class="b g" onclick="delDoc('${d.id}')">Supprimer</button></div>`).join('')||'<p class="m">Aucun document.</p>'}
 window.dl=dl2;
 const _docs=R.docs;
 R.docs=function(){_docs();const h=document.createElement('div');h.innerHTML=`<div class="c"><b>Google Drive</b><br><span class="m">Importe les PDF du semestre 1 depuis tes deux Drives.</span><br><button class="b" onclick="DRV_SYNC()">Resynchroniser les Drives</button><div id="drv"></div></div>${rapport(REP)}`;$('#v').insertBefore(h,$('#v').children[1]);dl2();if(T&&(T.run||T.fail))paint()};
