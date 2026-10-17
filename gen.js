@@ -39,12 +39,16 @@ for(;;){const{value,done}=await rd.read();if(done)break;buf+=dec.decode(value,{s
 while((i=buf.indexOf('\n'))>=0){const l=buf.slice(0,i).trim();buf=buf.slice(i+1);if(!l)continue;
 try{const j=JSON.parse(l);if(j.error)throw new Error(j.error);txt+=j.message&&j.message.content||'';R2.tk=txt.length}catch(e){if(!(e instanceof SyntaxError))throw e}}}
 try{return JSON.parse(txt)}catch(e){const m=txt.match(/\{[\s\S]*\}/);if(m)try{return JSON.parse(m[0])}catch(x){}throw new Error('Réponse illisible du modèle')}}
-function check(x,c,have){const q=String(x.q||'').trim();if(q.length<10||have.has(norm(q)))return null;if(!supported(x.extrait||'',c.txt))return null;
+const ratio=(e,txt)=>{const a=W(e);if(!a.length)return 0;const s=new Set(W(txt));return a.filter(w=>s.has(w)).length/a.length};
+function check(x,c,have){const q=String(x.q||'').trim();if(q.length<10)return{err:'question trop courte'};if(have.has(norm(q)))return{err:'doublon'};
 let opts=null;if(x.type=='qcm'){opts=(x.options||[]).map(o=>({t:String(o.t||'').trim(),ok:!!o.ok})).filter(o=>o.t);
-if(opts.length<2||opts.length>6||!opts.some(o=>o.ok)||opts.every(o=>o.ok)||new Set(opts.map(o=>norm(o.t))).size<opts.length)return null}
-else if(!String(x.rep||'').trim())return null;
+if(opts.length<2||opts.length>6||!opts.some(o=>o.ok)||opts.every(o=>o.ok)||new Set(opts.map(o=>norm(o.t))).size<opts.length)return{err:'options invalides'}}
+else if(!String(x.rep||'').trim())return{err:'réponse vide'};
+const good=(opts?opts.filter(o=>o.ok).map(o=>o.t).join(' '):'')+' '+String(x.rep||'');
+const s1=ratio(x.extrait||'',c.txt),s2=ratio(q+' '+good,c.txt);
+if(s1<.35&&s2<.5)return{err:'hors du texte'};
 const pg=Number.isInteger(x.page)&&x.page>=c.a&&x.page<=c.b?x.page:c.a;
-return{q,type:x.type=='qcm'?'qcm':'court',opts,rep:String(x.rep||'').trim(),ex:x.extrait,page:pg}}
+return{q,type:x.type=='qcm'?'qcm':'court',opts,rep:String(x.rep||'').trim(),ex:x.extrait,page:pg,ver:s1>=.7}}
 async function doc(d,ix,tot){const b=await blob(d.id);if(!b)throw new Error('PDF indisponible sur cet appareil');
 const pg=await pagesOf(b);
 if(pg.join('').length<100*Math.min(pg.length,3)){d.gen={n:0,note:'scanné',date:Date.now()};touch(d);save();note(`! ${d.titre} : PDF scanné ou illisible (OCR nécessaire), ignoré`);return}
@@ -52,11 +56,11 @@ const ch=chunks(pg,C.ppc),have=new Set(live('qs').map(q=>norm(q.q)));let n=0,fai
 for(const [j,c] of ch.entries()){if(R2.stop)return;
 R2.msg=`Document ${ix}/${tot} : ${d.titre} — bloc ${j+1}/${ch.length} (pages ${c.a}-${c.b})`;R2.pct=Math.round(((ix-1)+j/ch.length)/tot*100);paint();
 let res;try{res=await ask(c,d)}catch(e){if(e instanceof TypeError||e.name=='AbortError')throw e;fails++;note(`! bloc pages ${c.a}-${c.b} : ${e.message}`);continue}
-let ok=0,rej=0;
-for(const x of res.questions||[]){const v=check(x,c,have);if(!v){rej++;continue}
-S.qs.push(touch({id:uid(),kind:EX.includes(d.type)?'A':'B',mat:d.mat,chap:d.chap,doc:d.id,q:v.q,type:v.type,opts:v.opts,rep:(v.rep?v.rep+' — ':'')+`Source : ${d.titre}, p. ${v.page}`,box:0,next:0,ia:true,ex:v.ex}));
+let ok=0;const rj={};
+for(const x of res.questions||[]){const v=check(x,c,have);if(v.err){rj[v.err]=(rj[v.err]||0)+1;continue}
+S.qs.push(touch({id:uid(),kind:EX.includes(d.type)?'A':'B',mat:d.mat,chap:d.chap,doc:d.id,q:v.q,type:v.type,opts:v.opts,rep:(v.rep?v.rep+' — ':'')+`Source : ${d.titre}, p. ${v.page}${v.ver?'':' (à vérifier dans le cours)'}`,box:0,next:0,ia:true,ver:v.ver,ex:v.ex}));
 have.add(norm(v.q));n++;ok++;R2.added++}
-note(`✓ pages ${c.a}-${c.b} : ${ok} question(s) ajoutée(s)${rej?`, ${rej} rejetée(s) (non vérifiables dans le texte)`:''}`);save()}
+note(`✓ pages ${c.a}-${c.b} : ${ok} question(s) ajoutée(s)${Object.keys(rj).length?', rejetée(s) : '+Object.entries(rj).map(([k,n])=>n+' '+k).join(', '):''}`);save()}
 if(R2.stop)return;
 d.gen={n,date:Date.now(),model:C.model};touch(d);save();if(window.dl)window.dl()}
 async function run(docs){if(R2&&R2.run)return;readC();const b=$('#gen');
